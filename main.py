@@ -1,5 +1,6 @@
 import logging
 import sqlite3
+import os
 from telegram import (
     Update,
     InlineKeyboardButton,
@@ -886,6 +887,32 @@ async def process_support_msg(update: Update, context: ContextTypes.DEFAULT_TYPE
     await update.message.reply_text("✅ **Xabaringiz adminga yetkazildi!** Tez orada javob beriladi.", parse_mode="Markdown")
     return ConversationHandler.END
 
+import json
+
+async def web_app_data_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    data_raw = update.message.web_app_data.data
+    data = json.loads(data_raw)
+    
+    title = data.get("title")
+    price = data.get("price")
+    user = update.effective_user
+
+    await update.message.reply_text(
+        f"✅ **Mini App orqali buyurtma qabul qilindi!**\n\n"
+        f"📦 **Xizmat:** `{title}`\n"
+        f"💰 **Narxi:** `{price:,.0f} so'm`\n\n"
+        f"⚡ Buyurtmangiz ko'rib chiqilmoqda!",
+        parse_mode="Markdown"
+    )
+
+    admin_msg = (
+        f"📥 **MINI APP'DAN YANGI BUYURTMA!** 🚀\n\n"
+        f"👤 **Mijoz:** [{user.full_name}](tg://user?id={user.id}) (`{user.id}`)\n"
+        f"📦 **Xizmat:** `{title}`\n"
+        f"💰 **Narxi:** `{price:,.0f} so'm`"
+    )
+    await context.bot.send_message(chat_id=ADMIN_ID, text=admin_msg, parse_mode="Markdown")
+
 # ==================== ADMIN PANEL HANDLERS ====================
 async def admin_panel_show(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn = sqlite3.connect("bot_base.db")
@@ -1118,13 +1145,24 @@ def main():
     app.add_handler(admin_handler)
     app.add_handler(support_handler)
 
+    # WebApp va boshqa handlerlar
+    app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, web_app_data_handler))
     app.add_handler(CallbackQueryHandler(admin_callback_handler, pattern="^(doneorder_|rejectdep_|admin_channels_list|admin_panel_back)"))
     app.add_handler(CallbackQueryHandler(handle_callback))
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
     print("Bot muvaffaqiyatli ishga tushdi! 🚀")
-    app.run_polling()
+
+    # ==================== RENDER WEBHOOK SOZLAMASI ====================
+    PORT = int(os.environ.get('PORT', 8080))
+    WEBHOOK_URL = "https://my-telegram-bot-1.onrender.com"  # Render sahifangiz havolasi
+
+    app.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        webhook_url=WEBHOOK_URL
+    )
 
 
 if __name__ == "__main__":
